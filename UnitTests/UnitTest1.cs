@@ -13,12 +13,12 @@ using WebAPI.Controllers;
 using Xunit;
 
 
-using System;
+/*using System;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
 using Microsoft.IdentityModel.Tokens;
-using System.Security.Cryptography;
+using System.Security.Cryptography;*/
 
 
 namespace UnitTests
@@ -28,6 +28,10 @@ namespace UnitTests
         private string stringTestGitHubUserName()
         {
             return "octocat";
+        }
+        private int intTestGitHubUserID()
+        {
+            return 583231;
         }
         private string stringTestFreshDeskSubdomain()
         {
@@ -94,9 +98,10 @@ namespace UnitTests
 
             Assert.IsType<GitHubUser>(user);
             Assert.Equal(stringTestGitHubUserName(), user.login);
-            Assert.Equal(583231, user.id);
+            Assert.Equal(intTestGitHubUserID(), user.id);
 
         }
+
 
         [Fact]
         public async Task freshDesk_createInexistentUser_returns_OK_New()
@@ -143,6 +148,55 @@ namespace UnitTests
 
             GitHubUser user = JsonSerializer.Deserialize<GitHubUser>(jsonTestGitHubUser())!;
             String returnValue = await controller.setFreshDeskUser(stringTestFreshDeskSubdomain(), user);
+
+            Assert.Equal("OK_Update", returnValue);
+        }
+
+        [Fact]
+        public async Task main_functionality_OK_New()
+        {
+            var logger = new Mock<ILogger<GitHubUser2FreshDeskController>>();
+            var mockHandler = new Mock<HttpMessageHandler>(MockBehavior.Strict);
+            var httpClientFactory = new Mock<IHttpClientFactory>();
+            mockHandler.Protected()
+                .SetupSequence<Task<HttpResponseMessage>>("SendAsync", ItExpr.IsAny<HttpRequestMessage>(), ItExpr.IsAny<CancellationToken>())
+                .ReturnsAsync(responseMessage["gitHubUser"]);
+            mockHandler.Protected().SetupSequence<Task<HttpResponseMessage>>("SendAsync", ItExpr.Is<HttpRequestMessage>(request =>
+                request.Method == HttpMethod.Post
+                ), ItExpr.IsAny<CancellationToken>()).ReturnsAsync(responseMessage["freshDeskResponseNewUser"]);
+            mockHandler.Verify();
+
+            var httpClient = new HttpClient(mockHandler.Object, false);
+            httpClientFactory.Setup(_ => _.CreateClient(It.IsAny<string>())).Returns(httpClient);
+
+            var controller = new GitHubUser2FreshDeskController(logger.Object, httpClientFactory.Object);
+            string returnValue=await controller.GitHubUser2FreshDesk(stringTestGitHubUserName(),stringTestFreshDeskSubdomain());
+
+            Assert.Equal("OK_New", returnValue);
+        }
+
+        [Fact]
+        public async Task main_functionality_OK_Update()
+        {
+            var logger = new Mock<ILogger<GitHubUser2FreshDeskController>>();
+            var mockHandler = new Mock<HttpMessageHandler>(MockBehavior.Strict);
+            var httpClientFactory = new Mock<IHttpClientFactory>();
+            mockHandler.Protected()
+                .SetupSequence<Task<HttpResponseMessage>>("SendAsync", ItExpr.IsAny<HttpRequestMessage>(), ItExpr.IsAny<CancellationToken>())
+                .ReturnsAsync(responseMessage["gitHubUser"]);
+            mockHandler.Protected().SetupSequence<Task<HttpResponseMessage>>("SendAsync", ItExpr.Is<HttpRequestMessage>(request =>
+                request.Method == HttpMethod.Post
+                ), ItExpr.IsAny<CancellationToken>()).ReturnsAsync(responseMessage["freshDeskResponseDuplicateValue"]);
+            mockHandler.Protected().SetupSequence<Task<HttpResponseMessage>>("SendAsync", ItExpr.Is<HttpRequestMessage>(request =>
+                request.Method == HttpMethod.Put
+                ), ItExpr.IsAny<CancellationToken>()).ReturnsAsync(responseMessage["freshDeskResponseUpdatedUser"]);
+            mockHandler.Verify();
+
+            var httpClient = new HttpClient(mockHandler.Object, false);
+            httpClientFactory.Setup(_ => _.CreateClient(It.IsAny<string>())).Returns(httpClient);
+
+            var controller = new GitHubUser2FreshDeskController(logger.Object, httpClientFactory.Object);
+            string returnValue=await controller.GitHubUser2FreshDesk(stringTestGitHubUserName(),stringTestFreshDeskSubdomain());
 
             Assert.Equal("OK_Update", returnValue);
         }
